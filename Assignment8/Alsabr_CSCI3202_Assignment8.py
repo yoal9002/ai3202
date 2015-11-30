@@ -8,7 +8,6 @@
 
 import sys
 import math
-sys.setrecursionlimit(300000)
 
 letters = ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z','_']
 
@@ -17,9 +16,10 @@ observations = [] # Hold all of the o's
 #Part 2
 actual_states = [] # Hold all of the s's for part 2 
 actual_observations = [] # Hold all of the o's part 2
-actual_sequence = []
-Emission = [] 
-Transition_list = []
+correct_sequence = []
+emissionlog = []
+transitionlog = []
+marginallog = []
 sum_prob = []
 options = [] #As big as possible to look for the min option
 
@@ -75,7 +75,7 @@ def calculateEmission(xt, et):
 	smoother_den += len(count_xt)
 	p = (smoother_num / smoother_den)
 	#Part 2
-	Emission.append(-1*(math.log10(p))) #Hold the list with index log(E) and log(J)
+#	Emission.append(math.log(p)) #Hold the list with index log(E) and log(J)
 
 	return p
 
@@ -103,7 +103,7 @@ def calculateTransition(xt_0, xt_1):
 	p = (smoother_num / smoother_den)
 	#Part 2
 	
-	Transition_list.append(-1*(math.log10(p)))
+#	Transition_list.append(math.log(p))
 	
 	return p			
 
@@ -123,18 +123,21 @@ def calculateMarginal(xt):
 	smoother_num += len(count_xt)
 	smoother_den += len(states)
 	p = (smoother_num / smoother_den)
+	
+#	Marginal.append(math.log(p))
 	return p
 
 
 def printfunction():
 	
+	print "\n------------PART 1------------\n"
 	print "------------Emission------------\n"
 	print "------------P(Et | Xt)------------\n"
 	for i in range(27):
 		for j in range(27):
 			print "P(",letters[j],"|",letters[i],") = ", calculateEmission(letters[i], letters[j])
 	
-	
+	print "------------PART 1------------\n"
 	print "------------End------------\n\n\n"
 	print "------------Transition------------\n"
 	print "------------P(Xt+1 | Xt)------------\n"
@@ -142,7 +145,7 @@ def printfunction():
 		for j2 in range(27):
 			print "P(",letters[j2],"|",letters[i2],") = ", calculateTransition(letters[i2], letters[j2])
 			
-	
+	print "------------PART 1------------\n"
 	print "------------End------------\n\n\n"
 	print "------------Marginal------------\n"
 	print "------------P(Xt)------------\n"
@@ -152,81 +155,96 @@ def printfunction():
 	print "------------End------------\n\n\n"
 
 def printfunction2():
-	
-	print "------------PART 2------------\n"
-	print "------------State sequence------------\n"
-	
-	for s in actual_sequence:
-		print s,
-	
-	print "------------End------------\n\n"
 
 	print "------------PART 2------------\n"
-	print "------------Error rate: ------------\n"
+	print "------------Error------------\n"
 	
-	print calculateError()
+	print "Error Rate:", viterbi()
+	
+	print "------------End------------\n\n\n"	
+	print "------------PART 2------------\n"
+	print "------------Sequence------------\n"
 	
 	
+	sequence = ""
+	for i in correct_sequence:
+		sequence += letters[i]
+	
+	print sequence
 	
 
 # Part 2
-def viterbiinitiate():
-	prob = 0.0
-	index1 = 0
-	max_letter = ''
+		
+def viterbi():
+	
+	
+	emissionlog = [ [ math.log(calculateEmission(letters[j], letters[i])) for i in range(27) ] for j in range(27) ]
+	transitionlog = [ [ math.log(calculateTransition(letters[j], letters[i])) for i in range(27) ] for j in range(27) ]
+	marginallog = [ math.log(calculateMarginal(letters[i])) for i in range(27) ]
+	
+	# Used for log addtion
+	prevLog = [0.0] * 27
+	currentLog = [0.0] * 27
+	path = [[0 for i in range(27)] for j in range(len(actual_states))]
 	
 	for i in range(27):
-		index1 = (27 * i) + letters.index(actual_observations[0])
-		prob = -1*(math.log10(calculateMarginal(letters[i]))) + Emission[index1]
-		sum_prob.append(prob)
+		prevLog[i] = emissionlog[i][letters.index(actual_observations[0])] + marginallog[i]
 	
-	max_letter = letters[(sum_prob.index(min(sum_prob)))]
-	actual_sequence.append(max_letter)
-	
-	return max_letter
+	for index in range(len(actual_states)):
+		for current in range(27):	
+			options = [ (emissionlog[current][letters.index(actual_observations[index])] + transitionlog[previous][current] + prevLog[previous]) for previous in range(27) ]
+			currentLog[current] = max(options) # get the best option
+			path[index][current] = options.index(currentLog[current]) # set option to path
 		
-def viterbirun(start_letter, index):
-	options = [999999999999999999.0]*27
-	
-	if index < len(actual_observations):
-		
-		for cuurent in range(27):
-			for previous in range(27):
-				log_probability = Transition_list[((27 * previous) + cuurent)] + Emission[(27*letters.index(actual_observations[index])) + cuurent] + sum_prob[previous]
-				if options[cuurent] > log_probability:
-					 options[cuurent] = log_probability # store the best possible state
-					
-		for i in range(27):
-			sum_prob[i] = options[i]
-		
-		max_letter = letters[(sum_prob.index(min(sum_prob)))]
-		actual_sequence.append(max_letter)
-		viterbirun(index, index+1)
-	
-	return actual_sequence
+		for i in range(27): 
+			prevLog[i] = currentLog[i]
+			
+	actual_sequence = [-1] * len(actual_states)
+	bestLog = max(currentLog)
+	bestlogindex = currentLog.index(bestLog)
+	lastNode = bestlogindex
+	for j in range(len(path)-1, -1, -1): # Back track the path
+		actual_sequence[j] = lastNode
+		lastNode = path[j][lastNode]
 
-def calculateError():
-	error = 0.0
-	actual1 = 0.0
-	l = (len(actual_observations))
-	for i in range(l):
-		if actual_sequence[i] == actual_states[i]:
-			actual1+=1
-	
-	error = 1 - (actual1 / l)
-	return error
 	
 	
+	# Calculate Error Rate 
+	correctStates = 0
+	for i in range(len(actual_states)):
+		if actual_sequence[i] == letters.index(actual_states[i]):
+			correctStates += 1
+
+	errorRate = 1.0 - float(correctStates) / float(len(actual_states))
+	
+	correct_sequence = actual_sequence
+	
+	
+	
+	print "------------PART 2------------\n"
+	print "------------Error------------\n"
+	
+	print "Error Rate:", errorRate
+	
+	print "------------End------------\n"	
+	print "------------Sequence------------\n"
+	
+	sequence = ""
+	for i in actual_sequence:
+		sequence += letters[i]
+	
+	print sequence
+	
+	return errorRate	
 
 def main():
 	
 	readFile(sys.argv[1])
 	readFile2(sys.argv[2])
+	viterbi()	
 	printfunction()
 	
-	viterbiinitiate()
-	viterbirun(actual_sequence[0], 1)
-	printfunction2()
+#	printfunction2()
 	
 
 if __name__ == '__main__':
